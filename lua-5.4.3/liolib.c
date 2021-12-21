@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <locale.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -23,6 +24,12 @@
 #include "lualib.h"
 
 
+void setnonblocking(FILE *f) {
+  int fd = fileno(f);
+  int flags = fcntl(fd, F_GETFL, 0);
+  flags |= O_NONBLOCK;
+  fcntl(fd, F_SETFL, flags);
+}
 
 
 /*
@@ -261,6 +268,7 @@ static LStream *newfile (lua_State *L) {
 static void opencheck (lua_State *L, const char *fname, const char *mode) {
   LStream *p = newfile(L);
   p->f = fopen(fname, mode);
+  setnonblocking(p->f);
   if (l_unlikely(p->f == NULL))
     luaL_error(L, "cannot open file '%s' (%s)", fname, strerror(errno));
 }
@@ -273,6 +281,7 @@ static int io_open (lua_State *L) {
   const char *md = mode;  /* to traverse/check mode */
   luaL_argcheck(L, l_checkmode(md), 2, "invalid mode");
   p->f = fopen(filename, mode);
+  setnonblocking(p->f);
   return (p->f == NULL) ? luaL_fileresult(L, 0, filename) : 1;
 }
 
@@ -293,6 +302,7 @@ static int io_popen (lua_State *L) {
   LStream *p = newprefile(L);
   luaL_argcheck(L, l_checkmodep(mode), 2, "invalid mode");
   p->f = l_popen(L, filename, mode);
+  setnonblocking(p->f);
   p->closef = &io_pclose;
   return (p->f == NULL) ? luaL_fileresult(L, 0, filename) : 1;
 }
@@ -301,6 +311,7 @@ static int io_popen (lua_State *L) {
 static int io_tmpfile (lua_State *L) {
   LStream *p = newfile(L);
   p->f = tmpfile();
+  setnonblocking(p->f);
   return (p->f == NULL) ? luaL_fileresult(L, 0, NULL) : 1;
 }
 
@@ -807,6 +818,7 @@ static void createstdfile (lua_State *L, FILE *f, const char *k,
                            const char *fname) {
   LStream *p = newprefile(L);
   p->f = f;
+  setnonblocking(p->f);
   p->closef = &io_noclose;
   if (k != NULL) {
     lua_pushvalue(L, -1);
